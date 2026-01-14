@@ -617,9 +617,13 @@ if __name__ == '__main__':
     print("Tracking models from Hugging Face, ModelScope, and more")
     print("Press Ctrl+C to stop")
     print("=" * 50 + "\n")
-    
+
     def open_browser():
         webbrowser.open('http://localhost:5000')
-    
+
     threading.Timer(1.0, open_browser).start()
-    app.run(debug=True, port=5000)
+
+    if getattr(sys, 'frozen', False):
+        app.run(debug=False, port=5000)
+    else:
+        app.run(debug=True, port=5000)
