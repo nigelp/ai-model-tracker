@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data & Reports
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+reports/*.html
+!data/.gitkeep
+!reports/.gitkeep
+
+# System
+.DS_Store
+Thumbs.db
+
+# Claude & AI tools
+.claude/
+.vibe/
+.zentara/

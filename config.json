@@ -1,0 +1,10 @@
+{
+    "scrape_interval_hours": 6,
+    "max_models_per_source": 100,
+    "sources": {
+        "huggingface": true,
+        "modelscope": true
+    },
+    "vram_limit_gb": 24,
+    "include_chinese": true
+}
