@@ -4,6 +4,8 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/badge/release-v1.0.0-orange.svg)](https://github.com/nigelp/ai-model-tracker/releases)
 
+![aitrackerscreen](https://github.com/user-attachments/assets/4a3c6ff9-6763-4efe-8bbf-94eaa2e0133b)
+
 **AI Model Tracker** is a one-click desktop application that automatically discovers and organizes AI models from across the internet. It solves the problem of "model sprawl" where you have models scattered everywhere without knowing what you have, what's new, or what will work on your hardware.
 
 ## ✨ Key Features
