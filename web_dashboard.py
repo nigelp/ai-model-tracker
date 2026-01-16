@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, request
 import sqlite3
 import json
 import os
@@ -84,8 +84,12 @@ HTML_TEMPLATE = '''
             border: 1px solid #e1e4e8;
             border-radius: 10px;
             padding: 20px;
+            padding-bottom: 45px;
             transition: all 0.3s ease;
             cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
         }
         .model-card:hover {
             transform: translateY(-5px);
@@ -95,28 +99,45 @@ HTML_TEMPLATE = '''
         .model-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            gap: 10px;
         }
         .model-title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
             color: #333;
+            word-break: break-word;
+            line-height: 1.3;
+        }
+        .model-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+        .model-checkbox {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
         }
         .badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
             font-weight: 500;
         }
-        .badge-hf { background: #ffd700; color: black; }
+        .badge-hf { background: #ffd700; color: #333; }
         .badge-ms { background: #ff6b6b; color: white; }
         .badge-chinese { background: #4ecdc4; color: white; }
         .badge-gguf { background: #17a2b8; color: white; }
         .badge-quant { background: #6f42c1; color: white; font-family: monospace; }
         .gguf-info {
-            background: #f0f7ff;
-            border-radius: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
             padding: 10px;
             margin: 10px 0;
             font-size: 12px;
@@ -132,17 +153,21 @@ HTML_TEMPLATE = '''
         .vram-warning { color: #ffc107; }
         .vram-high { color: #dc3545; }
         .model-desc {
-            color: #666;
-            font-size: 14px;
+            color: #555;
+            font-size: 13px;
             line-height: 1.5;
             margin: 10px 0;
+            flex: 1;
         }
         .model-meta {
             color: #888;
             font-size: 12px;
-            margin-top: 15px;
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
+            align-items: center;
         }
         .size-indicator {
             height: 6px;
@@ -227,7 +252,20 @@ HTML_TEMPLATE = '''
                 <input type="text" id="search" placeholder="Search models..." onkeyup="filterModels()" style="flex-grow: 1;">
             </div>
         </div>
-        
+
+        <div class="bulk-actions" id="bulk-actions" style="display: none; background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #ffc107;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #856404; font-weight: 500;">
+                    <span id="selected-count">0</span> models selected
+                </span>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="selectAllVisible()" style="padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Select All Visible</button>
+                    <button onclick="clearSelection()" style="padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Clear Selection</button>
+                    <button onclick="deleteSelected()" style="padding: 8px 15px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Delete Selected</button>
+                </div>
+            </div>
+        </div>
+
         <div class="model-grid" id="model-list">
             <div class="loading">Loading models...</div>
         </div>
@@ -294,43 +332,25 @@ HTML_TEMPLATE = '''
                 <div class="model-card" onclick="window.open('${model.url}', '_blank')">
                     <div class="model-header">
                         <div class="model-title">${model.name}</div>
-                        <div>
+                        <div class="model-badges">
                             ${(model.is_gguf || model.name.toLowerCase().includes('gguf')) ? '<span class="badge badge-gguf">GGUF</span>' : ''}
                             ${model.is_chinese ? '<span class="badge badge-chinese">中文</span>' : ''}
                             <span class="badge badge-${model.source === 'huggingface' ? 'hf' : 'ms'}">
-                                ${model.source.toUpperCase()}
+                                ${model.source === 'huggingface' ? 'HF' : 'MS'}
                             </span>
                         </div>
                     </div>
 
-                    <div class="model-desc">
-                        ${model.description || 'No description available'}
-                    </div>
+                    <div class="model-desc">${model.description || 'No description available'}</div>
 
                     ${model.is_gguf && model.quantization ? `
                         <div class="gguf-info">
                             <div class="gguf-row">
-                                <span class="gguf-label">Quantization</span>
+                                <span class="gguf-label">Quant</span>
                                 <span class="badge badge-quant">${model.quantization}</span>
                             </div>
-                            ${model.vram_required_gb ? `
-                            <div class="gguf-row">
-                                <span class="gguf-label">VRAM Required</span>
-                                <span class="gguf-value ${model.vram_required_gb <= 8 ? 'vram-ok' : model.vram_required_gb <= 24 ? 'vram-warning' : 'vram-high'}">${model.vram_required_gb}GB</span>
-                            </div>
-                            ` : ''}
-                            ${model.context_length ? `
-                            <div class="gguf-row">
-                                <span class="gguf-label">Context</span>
-                                <span class="gguf-value">${(model.context_length / 1024).toFixed(0)}K</span>
-                            </div>
-                            ` : ''}
-                            ${model.gguf_architecture ? `
-                            <div class="gguf-row">
-                                <span class="gguf-label">Architecture</span>
-                                <span class="gguf-value">${model.gguf_architecture}</span>
-                            </div>
-                            ` : ''}
+                            ${model.vram_required_gb ? `<div class="gguf-row"><span class="gguf-label">VRAM</span><span class="gguf-value ${model.vram_required_gb <= 8 ? 'vram-ok' : model.vram_required_gb <= 24 ? 'vram-warning' : 'vram-high'}">${model.vram_required_gb}GB</span></div>` : ''}
+                            ${model.context_length ? `<div class="gguf-row"><span class="gguf-label">Context</span><span class="gguf-value">${(model.context_length / 1024).toFixed(0)}K</span></div>` : ''}
                         </div>
                     ` : ''}
 
@@ -345,8 +365,9 @@ HTML_TEMPLATE = '''
 
                     <div class="model-meta">
                         <span>${model.category.toUpperCase()}</span>
-                        <span>${model.release_date}</span>
+                        <span>${model.release_date || 'Unknown'}</span>
                     </div>
+                    <input type="checkbox" class="model-checkbox" data-id="${model.id}" onclick="event.stopPropagation(); updateBulkActions();">
                 </div>
             `).join('');
         }
@@ -476,7 +497,66 @@ HTML_TEMPLATE = '''
             linkElement.setAttribute('download', exportFileDefaultName);
             linkElement.click();
         }
-        
+
+        // Bulk delete functions
+        function updateBulkActions() {
+            const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+            const count = checkboxes.length;
+            const bulkActions = document.getElementById('bulk-actions');
+            const selectedCount = document.getElementById('selected-count');
+
+            selectedCount.textContent = count;
+            bulkActions.style.display = count > 0 ? 'block' : 'none';
+        }
+
+        function selectAllVisible() {
+            const checkboxes = document.querySelectorAll('.model-checkbox');
+            checkboxes.forEach(cb => cb.checked = true);
+            updateBulkActions();
+        }
+
+        function clearSelection() {
+            const checkboxes = document.querySelectorAll('.model-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            updateBulkActions();
+        }
+
+        function deleteSelected() {
+            const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+            const modelIds = Array.from(checkboxes).map(cb => cb.dataset.id);
+
+            if (modelIds.length === 0) {
+                alert('No models selected');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete ${modelIds.length} model(s)? This action cannot be undone.`)) {
+                return;
+            }
+
+            fetch('/api/models/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ model_ids: modelIds })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    clearSelection();
+                    loadData(); // Reload the data
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting models:', error);
+                alert('Error deleting models. Please try again.');
+            });
+        }
+
         // Load data on page load
         loadData();
         
@@ -510,6 +590,54 @@ def get_models():
     conn = get_db_connection()
     models = conn.execute('SELECT * FROM models ORDER BY release_date DESC').fetchall()
     conn.close()
+
+    # Filter out spam models from results
+    def is_spam_model_name(name: str) -> bool:
+        """Detect spam models based on name patterns."""
+        if not name:
+            return True
+
+        name_lower = name.lower()
+        vowels = set('aeiou')
+        letters = [c for c in name_lower if c.isalpha()]
+
+        if len(letters) == 0:
+            return True
+
+        vowel_count = sum(1 for c in letters if c in vowels)
+        vowel_ratio = vowel_count / len(letters)
+
+        # Spam models often have very few vowels (< 20%)
+        if vowel_ratio < 0.2 and len(letters) > 5:
+            return True
+
+        # Check for random hex-like strings (many numbers and mixed case)
+        digits = sum(1 for c in name_lower if c.isdigit())
+        digit_ratio = digits / len(name_lower) if name_lower else 0
+
+        # High digit ratio (> 30%) suggests random strings
+        if digit_ratio > 0.3 and len(name_lower) > 8:
+            return True
+
+        # Check for patterns like "4mfYuMMiCrfj1d8" (random mixed case + numbers)
+        has_upper = any(c.isupper() for c in name)
+        has_lower = any(c.islower() for c in name)
+        has_digit = any(c.isdigit() for c in name)
+
+        if has_upper and has_lower and has_digit and len(name) > 10:
+            # Check if it looks like a random string (no common words)
+            common_words = ['llama', 'qwen', 'mistral', 'gpt', 'bert', 'phi', 'yi',
+                           'deepseek', 'baichuan', 'chatglm', 'stable', 'diffusion',
+                           'flux', 'sdxl', 'instruct', 'chat', 'base', 'large']
+            has_common_word = any(word in name_lower for word in common_words)
+
+            if not has_common_word:
+                return True
+
+        return False
+
+    # Convert to list of dicts and filter spam
+    models_list = [dict(model) for model in models if not is_spam_model_name(model['name'])]
     
     # Convert to list of dicts
     models_list = [dict(model) for model in models]
@@ -608,6 +736,31 @@ def scrape_status():
         'last_update': scraping_status['last_update'],
         'last_result': scraping_status['last_result']
     })
+
+@app.route('/api/models/delete', methods=['POST'])
+def delete_models():
+    """Delete models by their IDs."""
+    data = request.get_json()
+    model_ids = data.get('model_ids', [])
+
+    if not model_ids:
+        return jsonify({'error': 'No model IDs provided'}), 400
+
+    conn = get_db_connection()
+    try:
+        placeholders = ','.join('?' * len(model_ids))
+        cursor = conn.execute(f'DELETE FROM models WHERE id IN ({placeholders})', model_ids)
+        conn.commit()
+        deleted_count = cursor.rowcount
+        conn.close()
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Deleted {deleted_count} model(s)'
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("=" * 50)

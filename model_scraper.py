@@ -202,6 +202,70 @@ def is_chinese_model(model_data):
     return False
 
 
+def is_spam_model(model_name: str) -> bool:
+    """Detect spam models based on name patterns.
+
+    Spam models typically have:
+    - Random alphanumeric strings (e.g., "4mfYuMMiCrfj1d8")
+    - No vowels or very few vowels
+    - Very short or very long names without meaningful words
+    - High ratio of numbers to letters
+
+    Args:
+        model_name: The model name to check
+
+    Returns:
+        True if the model appears to be spam
+    """
+    if not model_name:
+        return True
+
+    name_lower = model_name.lower()
+
+    # Check for random-looking strings (high ratio of consonants to vowels)
+    vowels = set('aeiou')
+    letters = [c for c in name_lower if c.isalpha()]
+
+    if len(letters) == 0:
+        return True
+
+    vowel_count = sum(1 for c in letters if c in vowels)
+    vowel_ratio = vowel_count / len(letters)
+
+    # Spam models often have very few vowels (< 20%)
+    if vowel_ratio < 0.2 and len(letters) > 5:
+        return True
+
+    # Check for random hex-like strings (many numbers and mixed case)
+    digits = sum(1 for c in name_lower if c.isdigit())
+    digit_ratio = digits / len(name_lower) if name_lower else 0
+
+    # High digit ratio (> 30%) suggests random strings
+    if digit_ratio > 0.3 and len(name_lower) > 8:
+        return True
+
+    # Check for patterns like "4mfYuMMiCrfj1d8" (random mixed case + numbers)
+    has_upper = any(c.isupper() for c in model_name)
+    has_lower = any(c.islower() for c in model_name)
+    has_digit = any(c.isdigit() for c in model_name)
+
+    if has_upper and has_lower and has_digit and len(model_name) > 10:
+        # Check if it looks like a random string (no common words)
+        common_words = ['llama', 'qwen', 'mistral', 'gpt', 'bert', 'phi', 'yi',
+                       'deepseek', 'baichuan', 'chatglm', 'stable', 'diffusion',
+                       'flux', 'sdxl', 'instruct', 'chat', 'base', 'large']
+        has_common_word = any(word in name_lower for word in common_words)
+
+        if not has_common_word:
+            return True
+
+    # Very short names with only numbers/symbols
+    if len(model_name) < 3 and not any(c.isalpha() for c in model_name):
+        return True
+
+    return False
+
+
 # ============================================
 # GGUF Detection and Metadata Functions
 # ============================================
@@ -374,6 +438,11 @@ def scrape_huggingface(config, limit=50):
                 if not model_id:
                     continue
 
+                # Filter out spam models
+                model_name = model_id.split('/')[-1]
+                if is_spam_model(model_name):
+                    continue
+
                 url = f"https://huggingface.co/{model_id}"
                 if url in seen_urls:
                     continue
@@ -425,6 +494,11 @@ def scrape_huggingface(config, limit=50):
             for model in data:
                 model_id = model.get('id', '')
                 if not model_id:
+                    continue
+
+                # Filter out spam models
+                model_name = model_id.split('/')[-1]
+                if is_spam_model(model_name):
                     continue
 
                 url = f"https://huggingface.co/{model_id}"
@@ -480,6 +554,11 @@ def scrape_huggingface(config, limit=50):
             for model in data:
                 model_id = model.get('id', '')
                 if not model_id:
+                    continue
+
+                # Filter out spam models
+                model_name = model_id.split('/')[-1]
+                if is_spam_model(model_name):
                     continue
 
                 url = f"https://huggingface.co/{model_id}"
@@ -552,6 +631,10 @@ def scrape_modelscope(config, limit=100):
                 else:
                     org = ''
                     name = model_id
+
+                # Filter out spam models
+                if is_spam_model(name):
+                    continue
 
                 # Convert Unix timestamp to datetime string
                 created_ts = model.get('created', 0)
