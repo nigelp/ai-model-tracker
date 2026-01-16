@@ -78,7 +78,6 @@ ai-model-tracker/
 ├── requirements.txt     # Python dependencies
 ├── web_dashboard.spec   # PyInstaller spec
 ├── data/                # SQLite database (gitignored)
-├── dist/                # Windows .exe build
 ├── tools/              # External binaries
 └── reports/            # Generated reports (gitignored)
 ```
