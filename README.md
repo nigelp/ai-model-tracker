@@ -23,7 +23,7 @@
 
 ### Windows Users
 
-A executable file is available in Releases. For those who would rather do things the manual way - 
+An executable file is available in Releases. But for those who would rather do things the manual way - 
 
 1. **Clone the repository**
    ```bash
